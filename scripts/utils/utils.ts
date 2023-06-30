@@ -9,6 +9,81 @@ const dialog: Electron.Dialog = require('electron').remote.dialog;
 
 export class Utils
 {
+	static async uploadNotebookToNetlify(fileToOpen: string)
+	{
+		const AdmZip = require('adm-zip');
+		const zip = new AdmZip();
+		zip.addLocalFolder(ExportSettings.settings.netlifyNotebookPath);
+		const buffer = zip.toBuffer();
+
+		const https = require('https');
+
+		var notebookUrl = "";
+		var deployId = "";
+		var request = https.request({
+			hostname: 'api.netlify.com',
+			port: 443,
+			path: '/api/v1/sites/' + ExportSettings.settings.netlifySiteId + '/deploys',
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/zip',
+				'Content-Disposition': 'attachment; filename=example.zip',
+				'Authorization': 'Bearer '+ExportSettings.settings.netlifyAPIToken
+		}
+		}, (res:any) => {
+			res.on('data', async (d:any) =>  {
+				(d.toString())
+				var jsonResponse = JSON.parse(d.toString())
+				if ("url" in jsonResponse) {
+					notebookUrl = jsonResponse.url
+					deployId = jsonResponse.id
+
+					var notebookPublished = false
+					while (!notebookPublished) {
+						var request = https.request({
+							hostname: 'api.netlify.com',
+							port: 443,
+							path: '/api/v1/deploys/'+deployId,
+							method: 'GET',
+							headers: {
+								'Authorization': 'Bearer '+ExportSettings.settings.netlifyAPIToken
+							}
+						}, (res:any) => {						
+							res.on('data', (d:any) => {
+								(d.toString())
+								try {
+									var jsonResponse = JSON.parse(d.toString())
+									if ("state" in jsonResponse && jsonResponse.state === "ready") {
+										if (fileToOpen && notebookUrl){
+											open(notebookUrl+"/"+fileToOpen)
+										}
+										notebookPublished = true
+									}
+								} catch (error) {
+									
+								}
+							});
+						})
+			
+						request.on('error', (e:any) => {
+							// console.error(e);
+						});
+			
+						request.end();
+						await Utils.delay(1000)
+					}
+				}
+			});
+		});
+
+		request.on('error', (error:any) => {
+			console.error(error);
+		});
+
+		request.write(buffer);
+		request.end();
+	}
+
 	static async delay (ms: number)
 	{
 		return new Promise( resolve => setTimeout(resolve, ms) );

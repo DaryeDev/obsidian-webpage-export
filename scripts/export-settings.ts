@@ -37,6 +37,11 @@ export interface ExportSettingsData
 	exportPreset: string;
 	openAfterExport: boolean;
 
+	// Netlify Options
+	netlifyAPIToken: string;
+	netlifyNotebookPath: string;
+	netlifySiteId: string;
+
 	// Graph View Settings
 	graphAttractionForce: number;
 	graphLinkLength: number;
@@ -82,6 +87,11 @@ const DEFAULT_SETTINGS: ExportSettingsData =
 	// Main Export Options
 	exportPreset: '',
 	openAfterExport: true,
+
+	// Netlify Options
+	netlifyAPIToken: "",
+	netlifyNotebookPath: new Path("")._workingDirectory+"/.notebook",
+	netlifySiteId: "",
 
 	// Graph View Settings
 	graphAttractionForce: 1,
@@ -430,6 +440,56 @@ export class ExportSettings extends PluginSettingTab {
 					await ExportSettings.saveSettings();
 				}));
 
+		//#endregion
+
+		//#region Netlify Upload Options
+
+		hr = contentEl.createEl("hr");
+		hr.style.marginTop = "20px";
+		hr.style.marginBottom = "20px";
+		hr.style.borderColor = "var(--color-accent)";
+		hr.style.opacity = "0.5";
+		new Setting(contentEl)
+			.setName('Netlify Upload Options:')
+			.setHeading()
+
+		new Setting(contentEl)
+			.setName('Netlify API Token')
+			.setDesc('Netlify API Token')
+			.addText((text) => text
+				.setValue(ExportSettings.settings.netlifyAPIToken.toString())
+				.setPlaceholder(DEFAULT_SETTINGS.netlifyAPIToken.toString())
+				.onChange(async (value) => {
+					ExportSettings.settings.netlifyAPIToken = value.toString();
+					await ExportSettings.saveSettings();
+				}));
+
+		new Setting(contentEl)
+			.setName('Netlify Notebook Path')
+			.setDesc('Netlify Notebook Path')
+			.addText((text) => text
+				.setValue(ExportSettings.settings.netlifyNotebookPath.toString())
+				.setPlaceholder(DEFAULT_SETTINGS.netlifyNotebookPath.toString())
+				.onChange(async (value) => {
+					var wd = new Path("")._workingDirectory+"/"
+					if (!value.startsWith(wd)) {
+						ExportSettings.settings.netlifyNotebookPath = wd+value.toString();
+					} else {
+						ExportSettings.settings.netlifyNotebookPath = value.toString();
+					}
+					await ExportSettings.saveSettings();
+				}));
+
+		new Setting(contentEl)
+			.setName('Netlify Site Id')
+			.setDesc('Netlify Site Id')
+			.addText((text) => text
+				.setValue(ExportSettings.settings.netlifySiteId.toString())
+				.setPlaceholder(DEFAULT_SETTINGS.netlifySiteId.toString())
+				.onChange(async (value) => {
+					ExportSettings.settings.netlifySiteId = value.toString();
+					await ExportSettings.saveSettings();
+				}));
 
 		//#endregion
 

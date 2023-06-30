@@ -11,14 +11,37 @@ import { AssetHandler } from './html-generation/asset-handler';
 import { RenderLog } from './html-generation/render-log';
 import { Downloadable } from './utils/downloadable';
 import { GlobalDataGenerator, LinkTree } from './html-generation/global-gen';
+import {v4 as uuidv4} from 'uuid';
 
 export default class HTMLExportPlugin extends Plugin
 {
 	static plugin: HTMLExportPlugin;
 	static updateInfo: {updateAvailable: boolean, latestVersion: string, currentVersion: string, updateNote: string};
-
+	
 	async addCommands()
 	{
+		this.addCommand({
+			id: 'export-html-file-netlify-notebook',
+			name: 'Export current file to HTML and Netlify',
+			checkCallback: (checking: boolean) =>
+			{
+				let file = (Utils.getActiveTextView())?.file;
+				if(file instanceof TFile)
+				{	
+					if(checking) return true;
+					var fileId = uuidv4()
+					this.exportFile(file, new Path(file.path), undefined, new Path(ExportSettings.settings.netlifyNotebookPath+"/"+fileId+".html"), false).then((exportedFile) =>
+					{
+						if (exportedFile){
+							Utils.uploadNotebookToNetlify(fileId)
+						}
+					});
+				}
+
+				return false;
+			}
+		});
+
 		this.addCommand({
 			id: 'export-html-file',
 			name: 'Export current file to HTML',
@@ -113,6 +136,41 @@ export default class HTMLExportPlugin extends Plugin
 		this.registerEvent(
 			this.app.workspace.on("file-menu", (menu, file) =>
 			{
+				menu.addItem((item) =>
+				{
+					item
+						.setTitle("Export to HTML (Upload to Netlify)")
+						.setIcon("download")
+						.setSection("export")
+						.onClick(async () =>
+						{
+							var fileId = uuidv4().toString()
+							if(file instanceof TFile)
+							{
+								let path = new Path(file.path);
+								let exportedFile = await this.exportFile(file, path, undefined, new Path(ExportSettings.settings.netlifyNotebookPath+"/"+fileId+".html"), false);
+								if (exportedFile && ExportSettings.settings.openAfterExport)
+								{
+									Utils.uploadNotebookToNetlify(fileId)
+								}
+							}
+							else if(file instanceof TFolder)
+							{
+								var folderPath = new Path(file.path)
+								let exportInfo = await this.exportFolder(folderPath, false, new Path(ExportSettings.settings.netlifyNotebookPath+"/"+fileId));
+								if (exportInfo.success)
+								{
+									Utils.uploadNotebookToNetlify(fileId+"/"+file.name+(app.vault.fileMap[file.path+"/index.md"]? "" : "/"+app.vault.fileMap[file.path].children.filter((child) => child instanceof TFile)[0].basename))
+								}
+							}
+							else
+							{
+								console.error("File is not a TFile or TFolder! Invalid type: " + typeof file + "");
+								new Notice("File is not a File or Folder! Invalid type: " + typeof file + "", 5000);
+							}
+						});
+				});
+
 				menu.addItem((item) =>
 				{
 					item
@@ -212,7 +270,7 @@ export default class HTMLExportPlugin extends Plugin
 		return exportedFile;
 	}
 
-	async exportFolder(folderPath: Path, showSettings: boolean = true) : Promise<{success: boolean, exportedPath: Path}>
+	async exportFolder(folderPath: Path, showSettings: boolean = true, htmlPath: Path = Path.emptyPath) : Promise<{success: boolean, exportedPath: Path}>
 	{
 		performance.mark("start");
 
@@ -223,8 +281,10 @@ export default class HTMLExportPlugin extends Plugin
 			if (result.canceled) return {success: false, exportedPath: Path.emptyPath};
 		}
 
-		let htmlPath = await Utils.showSelectFolderDialog(Utils.idealDefaultPath());
-		if (!htmlPath) return {success: false, exportedPath: Path.emptyPath};
+		if (htmlPath == Path.emptyPath) {
+			let htmlPath = await Utils.showSelectFolderDialog(Utils.idealDefaultPath());
+			if (!htmlPath) return {success: false, exportedPath: Path.emptyPath};
+		}
 
 		// get files to export
 		let allFiles = this.app.vault.getMarkdownFiles();
